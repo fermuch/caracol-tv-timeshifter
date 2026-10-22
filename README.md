@@ -56,13 +56,19 @@ Guía de programación opcional: TV Guide Data Providers → XMLTV y mapear por
 - `recorder` (Python, sin dependencias) lee el playlist del panel, detecta
   segmentos nuevos y los descarga con `CONNS` conexiones HTTP Range en
   paralelo (el panel limita por conexión).
-- Escribe `data/index.m3u8` con los últimos `WINDOW` segmentos, dejando
-  siempre `DELAY` segmentos sin publicar entre lo descargado y el borde del
-  playlist. Así cada entrada del playlist es definitiva: el archivo ya está
-  escrito, renombrado y no se poda mientras siga publicado.
+- Escribe `data/index.m3u8` con los últimos `WINDOW` segmentos publicados.
+  Entre lo descargado y el borde del playlist queda un colchón de `DELAY`
+  segmentos (mínimo `MIN_DELAY`), así cada entrada del playlist es definitiva:
+  el archivo ya está escrito, renombrado y no se poda mientras siga publicado.
 - Los segmentos se conservan `SPARE` (60 s) más allá de cuando salen del
   playlist, así un reproductor que todavía tiene el playlist anterior no pide
   un archivo ya borrado.
+- El borde del playlist **avanza con reloj de pared** (un segmento cada 5 s),
+  pagando desde el colchón `DELAY`. Si la descarga se traba (el panel de origen
+  corta, el playlist tarda 30 s en responder) el reproductor no se queda sin
+  segmentos: se sigue publicando desde el colchón, y cuando el origen vuelve se
+  repone en ráfaga (lo que además le da más buffer al reproductor). Sin esto el
+  borde se congela con el origen y el player hace un freeze de 5-20 s.
 - `hls` (nginx) sirve solo `index.m3u8` y `seg_*.ts`, sin listado.
 - El atraso lo da el tamaño de la ventana más el delay: `(DELAY + WINDOW) x 5 s`
   de historia disponible, con el borde vivo `DELAY x 5 s` detrás de la
@@ -82,6 +88,7 @@ Guía de programación opcional: TV Guide Data Providers → XMLTV y mapear por
 | `WINDOW` | 60 | segmentos publicados en el playlist (x5 s) |
 | `DELAY` | 24 | segmentos de colchón entre la descarga y el borde del playlist (x5 s) |
 | `SPARE` | 12 | segmentos extra en disco después de salir del playlist (x5 s) |
+| `MIN_DELAY` | 6 | piso del colchón: nunca se publica algo más nuevo que eso (x5 s) |
 | `CONNS` | 24 | conexiones Range por segmento |
 | `POLL` | 1.5 | segundos entre consultas al playlist |
 

@@ -7,6 +7,7 @@ ENV OUT=/data \
     WINDOW=60 \
     DELAY=24 \
     SPARE=12 \
+    MIN_DELAY=6 \
     CONNS=24 \
     PYTHONUNBUFFERED=1
 

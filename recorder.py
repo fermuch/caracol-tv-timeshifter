@@ -6,15 +6,19 @@ Env:
   SOURCE  media playlist URL or its base directory (default: the Caracol panel)
   OUT     output directory served by nginx (default /data)
   WINDOW  segments published in the playlist (60 x 5 s = 5 min)
-  DELAY   segments kept between the newest downloaded segment and the newest
-          published one (24 x 5 s = 2 min). Every playlist entry is therefore
-          final: written, renamed and never pruned while it is published, so a
-          player can not hit a 404 or a half-written file on the live edge.
+  DELAY   reservoir of segments kept between the newest downloaded segment and
+          the newest published one (24 x 5 s = 2 min): the initial lag and the
+          depth of the shock absorber. The published edge advances on a wall
+          clock (one segment every 5 s) out of that reservoir, so download
+          jitter never starves the player - a stalled write head is paid out of
+          the reservoir instead of freezing the stream.
   CONNS   parallel Range connections per segment (24 measured ~1.3x realtime)
   POLL    source playlist poll interval in seconds
   SPARE   extra segments kept on disk after they leave the playlist (12 x 5 s):
           a player that still holds the previous playlist can read a segment
           that has just aged out instead of getting a 404
+  MIN_DELAY floor of the reservoir (6 x 5 s): never publish an entry fresher
+          than that, so every published segment is final on disk
 """
 import bisect
 import concurrent.futures as cf
@@ -32,8 +36,10 @@ OUT = os.environ.get("OUT", "/data")
 CONNS = int(os.environ.get("CONNS", "24"))
 WINDOW = int(os.environ.get("WINDOW", "60"))
 DELAY = int(os.environ.get("DELAY", "24"))
+MIN_DELAY = int(os.environ.get("MIN_DELAY", "6"))
 POLL = float(os.environ.get("POLL", "1.5"))
 SPARE = int(os.environ.get("SPARE", "12"))
+SEG_SECONDS = 5.0
 RETAIN = WINDOW + DELAY + SPARE
 
 PLAYLIST = SOURCE if SOURCE.endswith(".m3u8") else SOURCE.rstrip("/") + "/mono.m3u8"
@@ -134,25 +140,41 @@ def save_index(idx):
     os.rename(tmp, INDEX_FILE)
 
 
-def write_playlist(idx, inflight=()):
-    """Publish the delayed window and drop everything older.
+def published_slice(idx, pub_end):
+    if pub_end is None:
+        return []
+    pos = entry_pos(idx, pub_end)
+    if pos is None:
+        return []
+    return idx[max(0, pos - WINDOW + 1):pos + 1]
 
-    `idx` is seq-ordered, so the published slice is the last WINDOW segments
-    that are at least DELAY segments behind the download head. Files of the
-    whole retained window (published window + delay + SPARE), plus the ones
-    still downloading, are never deleted: pruning a file that a finished
-    download is about to register would put a 404 inside the playlist for its
-    full five minutes, and pruning one that has just left the playlist breaks
-    players still holding the previous copy of it.
+
+def entry_pos(idx, seq):
+    i = bisect.bisect_left(idx, seq, key=lambda e: e["seq"])
+    if i < len(idx) and idx[i]["seq"] == seq:
+        return i
+    return None
+
+
+def retain_slice(idx, keep):
+    """Everything published, everything newer (the reservoir) and SPARE extra.
+
+    The reservoir has to stay on disk: it is what the published edge pays out
+    when the write head stalls.
     """
-    retain = idx[-RETAIN:]
-    keep = idx[-(WINDOW + DELAY):-DELAY] if DELAY else retain[-WINDOW:]
+    if not keep:
+        return idx
+    start = max(0, entry_pos(idx, keep[0]["seq"]) - SPARE)
+    return idx[start:]
+
+
+def write_playlist(keep, retain, inflight=()):
     if not keep:
         return
-    lines = ["#EXTM3U", "#EXT-X-VERSION:3", "#EXT-X-TARGETDURATION:5",
+    lines = ["#EXTM3U", "#EXT-X-VERSION:3", f"#EXT-X-TARGETDURATION:{int(SEG_SECONDS)}",
              f"#EXT-X-MEDIA-SEQUENCE:{keep[0]['seq']}"]
     for e in keep:
-        lines += ["#EXTINF:5.000,", e["file"]]
+        lines += [f"#EXTINF:{SEG_SECONDS:.3f},", e["file"]]
     tmp = PLAYLIST_FILE + ".tmp"
     with open(tmp, "w") as fh:
         fh.write("\n".join(lines) + "\n")
@@ -165,6 +187,41 @@ def write_playlist(idx, inflight=()):
                 os.remove(os.path.join(OUT, f))
             except OSError:
                 pass
+
+
+def advance_publish(idx, pub_end, next_pub):
+    """Publish one segment per SEG_SECONDS of wall clock out of the reservoir.
+
+    Returns (pub_end, next_pub, changed). The schedule keeps running while the
+    write head is stalled, so the player keeps receiving segments; the debt is
+    repaid as a burst once content arrives again (which also hands the player
+    extra buffer).
+    """
+    if not idx:
+        return pub_end, next_pub, False
+    head = idx[-1]["seq"]
+    if pub_end is None:
+        if len(idx) <= DELAY:
+            return None, next_pub, False
+        pub_end = idx[-1 - DELAY]["seq"]
+        next_pub = time.monotonic()
+        return pub_end, next_pub, True
+    changed = False
+    now = time.monotonic()
+    while now >= next_pub:
+        pos = entry_pos(idx, pub_end)
+        if pos is None or pos + 1 >= len(idx):
+            break
+        cand = idx[pos + 1]
+        if cand["seq"] > head - MIN_DELAY:
+            break
+        pub_end = cand["seq"]
+        next_pub += SEG_SECONDS
+        changed = True
+        now = time.monotonic()
+        if next_pub < now - 12 * SEG_SECONDS:
+            next_pub = now - 12 * SEG_SECONDS
+    return pub_end, next_pub, changed
 
 
 def add_entry(idx, seq, path, name):
@@ -184,7 +241,10 @@ def main():
     idx = load_index()
     seq = idx[-1]["seq"] if idx else 0
     seen = {e["path"] for e in idx}
-    log(f"start source={PLAYLIST} out={OUT} window={WINDOW} delay={DELAY} spare={SPARE} conns={CONNS}")
+    pub_end = None
+    next_pub = time.monotonic()
+    log(f"start source={PLAYLIST} out={OUT} window={WINDOW} delay={DELAY} "
+        f"min_delay={MIN_DELAY} spare={SPARE} conns={CONNS}")
     log(f"recovered {len(idx)} segments, next seq {seq + 1}")
     pool = cf.ThreadPoolExecutor(max_workers=2)
     pending = {}
@@ -209,16 +269,24 @@ def main():
             try:
                 n = fut.result()
                 add_entry(idx, seq_i, path, name)
-                del idx[:-RETAIN]
-                inflight = {v[2] for v in pending.values()}
-                save_index(idx)
-                write_playlist(idx, inflight)
                 log(f"seg {seq_i} ok ({n/1024/1024:.1f} MB) total={len(idx)}")
             except Exception as e:  # noqa: BLE001
                 log(f"seg {seq_i} FAIL {e}")
+        prev_end = pub_end
+        pub_end, next_pub, _ = advance_publish(idx, pub_end, next_pub)
+        if pub_end != prev_end:
+            keep = published_slice(idx, pub_end)
+            retained = retain_slice(idx, keep)
+            start = entry_pos(idx, retained[0]["seq"]) if retained else 0
+            if start:
+                del idx[:start]
+            inflight = {v[2] for v in pending.values()}
+            save_index(idx)
+            write_playlist(keep, retained, inflight)
         if time.time() - last_status > 60:
             last_status = time.time()
-            log(f"status: {len(idx)} segments, retained {min(len(idx), RETAIN)}/{RETAIN}")
+            reservoir = 0 if pub_end is None else len(idx) - 1 - (entry_pos(idx, pub_end) or 0)
+            log(f"status: {len(idx)} segments, reservoir {reservoir}, published end {pub_end}")
         time.sleep(POLL)
     pool.shutdown(wait=False)
     log("stopped")

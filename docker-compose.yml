@@ -8,6 +8,7 @@ services:
       WINDOW: "60"    # 60 segmentos publicados x 5 s = 5 minutos de historia
       DELAY: "24"     # 24 segmentos x 5 s = 2 minutos de atraso del borde vivo
       SPARE: "12"     # 12 x 5 s extra en disco después de salir del playlist
+      MIN_DELAY: "6"  # piso del colchón: nada más nuevo que 30 s se publica
       CONNS: "24"     # conexiones Range en paralelo por segmento
     volumes:
       - ./data:/data
