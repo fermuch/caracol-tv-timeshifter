@@ -56,19 +56,28 @@ Guía de programación opcional: TV Guide Data Providers → XMLTV y mapear por
 - `recorder` (Python, sin dependencias) lee el playlist del panel, detecta
   segmentos nuevos y los descarga con `CONNS` conexiones HTTP Range en
   paralelo (el panel limita por conexión).
-- Escribe `data/index.m3u8` con los últimos `WINDOW` segmentos.
+- Escribe `data/index.m3u8` con los últimos `WINDOW` segmentos, dejando
+  siempre `DELAY` segmentos sin publicar entre lo descargado y el borde del
+  playlist. Así cada entrada del playlist es definitiva: el archivo ya está
+  escrito, renombrado y no se poda mientras siga publicado.
 - `hls` (nginx) sirve solo `index.m3u8` y `seg_*.ts`, sin listado.
-- El atraso lo da el tamaño de la ventana: `WINDOW x 5 s`.
-  - 60 → 5 min
-  - 120 → 10 min
-  - 360 → 30 min
+- El atraso lo da el tamaño de la ventana más el delay: `(DELAY + WINDOW) x 5 s`
+  de historia disponible, con el borde vivo `DELAY x 5 s` detrás de la
+  descarga.
+  - `WINDOW=60`, `DELAY=24` → 2 min de atraso y 7 min de historia
+  - `WINDOW=120`, `DELAY=24` → 2 min de atraso y 12 min de historia
+
+  Sin `DELAY` (0) el borde del playlist es el último segmento descargado y un
+  reproductor puede pedir un archivo que todavía no existe o que se acaba de
+  podar; en la práctica eso corta el stream unos segundos cada varios minutos.
 
 ## Ajustes
 
 | Variable | Default | Qué hace |
 |---|---|---|
 | `SOURCE` | panel Caracol | playlist HLS de origen |
-| `WINDOW` | 60 | segmentos en la ventana (x5 s) |
+| `WINDOW` | 60 | segmentos publicados en el playlist (x5 s) |
+| `DELAY` | 24 | segmentos de colchón entre la descarga y el borde del playlist (x5 s) |
 | `CONNS` | 24 | conexiones Range por segmento |
 | `POLL` | 1.5 | segundos entre consultas al playlist |
 

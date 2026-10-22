@@ -53,6 +53,7 @@
         "SOURCE=http://138.121.15.230:9002/CARACOL/tracks-v1a1/mono.m3u8",
         "OUT=/data",
         "WINDOW=60",
+        "DELAY=24",
         "CONNS=24",
         "POLL=1.5"
       ],

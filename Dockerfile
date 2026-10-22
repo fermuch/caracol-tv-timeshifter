@@ -5,6 +5,7 @@ COPY recorder.py /app/recorder.py
 
 ENV OUT=/data \
     WINDOW=60 \
+    DELAY=24 \
     CONNS=24 \
     PYTHONUNBUFFERED=1
 
