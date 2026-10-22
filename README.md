@@ -32,10 +32,24 @@ Constellation, agregá `"Tunnel": "_ANY_"` al route.
 URL para VLC / mpv / Jellyfin (tuner M3U):
 
 ```
-http://<IP-DEL-HOST>:8099/index.m3u8
+https://caracoltv.home.mumbach.dev/index.m3u8
 ```
 
 En el mismo host: `http://localhost:8099/index.m3u8`
+
+### Jellyfin (Live TV)
+
+Jellyfin no acepta el playlist HLS directo como tuner: necesita una lista de
+canales. `channels.m3u` la provee (servida por el contenedor `hls`).
+
+1. Dashboard → Live TV → Tuner Devices → `+` → tipo **M3U Tuner**.
+2. File or URL: `https://caracoltv.home.mumbach.dev/channels.m3u`.
+3. Simultaneous stream limit `0`, guardar.
+4. Scheduled Tasks → **Refresh Guide** (o esperar ~1 min).
+5. Live TV → Channels → *Caracol TV*.
+
+Guía de programación opcional: TV Guide Data Providers → XMLTV y mapear por
+`tvg-id="caracoltv"`.
 
 ## Cómo funciona
 
