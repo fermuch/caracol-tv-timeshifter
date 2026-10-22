@@ -12,6 +12,9 @@ Env:
           player can not hit a 404 or a half-written file on the live edge.
   CONNS   parallel Range connections per segment (24 measured ~1.3x realtime)
   POLL    source playlist poll interval in seconds
+  SPARE   extra segments kept on disk after they leave the playlist (12 x 5 s):
+          a player that still holds the previous playlist can read a segment
+          that has just aged out instead of getting a 404
 """
 import bisect
 import concurrent.futures as cf
@@ -30,7 +33,8 @@ CONNS = int(os.environ.get("CONNS", "24"))
 WINDOW = int(os.environ.get("WINDOW", "60"))
 DELAY = int(os.environ.get("DELAY", "24"))
 POLL = float(os.environ.get("POLL", "1.5"))
-RETAIN = WINDOW + DELAY
+SPARE = int(os.environ.get("SPARE", "12"))
+RETAIN = WINDOW + DELAY + SPARE
 
 PLAYLIST = SOURCE if SOURCE.endswith(".m3u8") else SOURCE.rstrip("/") + "/mono.m3u8"
 BASE_DIR = PLAYLIST.rsplit("/", 1)[0]
@@ -135,12 +139,14 @@ def write_playlist(idx, inflight=()):
 
     `idx` is seq-ordered, so the published slice is the last WINDOW segments
     that are at least DELAY segments behind the download head. Files of the
-    whole retained window, plus the ones still downloading, are never deleted:
-    pruning a file that a finished download is about to register would put a
-    404 inside the playlist for its full five minutes.
+    whole retained window (published window + delay + SPARE), plus the ones
+    still downloading, are never deleted: pruning a file that a finished
+    download is about to register would put a 404 inside the playlist for its
+    full five minutes, and pruning one that has just left the playlist breaks
+    players still holding the previous copy of it.
     """
     retain = idx[-RETAIN:]
-    keep = idx[-RETAIN:-DELAY] if DELAY else retain[-WINDOW:]
+    keep = idx[-(WINDOW + DELAY):-DELAY] if DELAY else retain[-WINDOW:]
     if not keep:
         return
     lines = ["#EXTM3U", "#EXT-X-VERSION:3", "#EXT-X-TARGETDURATION:5",
@@ -178,7 +184,7 @@ def main():
     idx = load_index()
     seq = idx[-1]["seq"] if idx else 0
     seen = {e["path"] for e in idx}
-    log(f"start source={PLAYLIST} out={OUT} window={WINDOW} delay={DELAY} conns={CONNS}")
+    log(f"start source={PLAYLIST} out={OUT} window={WINDOW} delay={DELAY} spare={SPARE} conns={CONNS}")
     log(f"recovered {len(idx)} segments, next seq {seq + 1}")
     pool = cf.ThreadPoolExecutor(max_workers=2)
     pending = {}
@@ -212,7 +218,7 @@ def main():
                 log(f"seg {seq_i} FAIL {e}")
         if time.time() - last_status > 60:
             last_status = time.time()
-            log(f"status: {len(idx)} segments, window {min(len(idx), RETAIN)}/{RETAIN}")
+            log(f"status: {len(idx)} segments, retained {min(len(idx), RETAIN)}/{RETAIN}")
         time.sleep(POLL)
     pool.shutdown(wait=False)
     log("stopped")

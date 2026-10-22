@@ -60,6 +60,9 @@ Guía de programación opcional: TV Guide Data Providers → XMLTV y mapear por
   siempre `DELAY` segmentos sin publicar entre lo descargado y el borde del
   playlist. Así cada entrada del playlist es definitiva: el archivo ya está
   escrito, renombrado y no se poda mientras siga publicado.
+- Los segmentos se conservan `SPARE` (60 s) más allá de cuando salen del
+  playlist, así un reproductor que todavía tiene el playlist anterior no pide
+  un archivo ya borrado.
 - `hls` (nginx) sirve solo `index.m3u8` y `seg_*.ts`, sin listado.
 - El atraso lo da el tamaño de la ventana más el delay: `(DELAY + WINDOW) x 5 s`
   de historia disponible, con el borde vivo `DELAY x 5 s` detrás de la
@@ -78,6 +81,7 @@ Guía de programación opcional: TV Guide Data Providers → XMLTV y mapear por
 | `SOURCE` | panel Caracol | playlist HLS de origen |
 | `WINDOW` | 60 | segmentos publicados en el playlist (x5 s) |
 | `DELAY` | 24 | segmentos de colchón entre la descarga y el borde del playlist (x5 s) |
+| `SPARE` | 12 | segmentos extra en disco después de salir del playlist (x5 s) |
 | `CONNS` | 24 | conexiones Range por segmento |
 | `POLL` | 1.5 | segundos entre consultas al playlist |
 

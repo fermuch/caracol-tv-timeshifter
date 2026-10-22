@@ -7,6 +7,7 @@ services:
       SOURCE: "http://138.121.15.230:9002/CARACOL/tracks-v1a1/mono.m3u8"
       WINDOW: "60"    # 60 segmentos publicados x 5 s = 5 minutos de historia
       DELAY: "24"     # 24 segmentos x 5 s = 2 minutos de atraso del borde vivo
+      SPARE: "12"     # 12 x 5 s extra en disco después de salir del playlist
       CONNS: "24"     # conexiones Range en paralelo por segmento
     volumes:
       - ./data:/data
