@@ -1,0 +1,23 @@
+services:
+  recorder:
+    build: .
+    container_name: timeshift-recorder
+    restart: unless-stopped
+    environment:
+      SOURCE: "http://138.121.15.230:9002/CARACOL/tracks-v1a1/mono.m3u8"
+      WINDOW: "60"    # 60 segmentos x 5 s = 5 minutos de atraso
+      CONNS: "24"     # conexiones Range en paralelo por segmento
+    volumes:
+      - ./data:/data
+
+  hls:
+    image: nginx:alpine
+    container_name: timeshift-hls
+    restart: unless-stopped
+    depends_on:
+      - recorder
+    ports:
+      - "8099:80"
+    volumes:
+      - ./data:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro

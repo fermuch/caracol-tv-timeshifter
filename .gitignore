@@ -1,0 +1,13 @@
+# Runtime data (HLS segments, playlist, recorder state)
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Local overrides
+.env
+*.local
+
+# OS/editor noise
+.DS_Store
