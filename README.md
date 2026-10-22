@@ -18,15 +18,16 @@ ghcr.io/fermuch/caracol-tv-timeshifter:hls      # nginx HLS (config incluida)
 
 ### Cosmos Cloud
 
-`cosmos-compose.json` levanta los dos contenedores con un volumen compartido y
-expone el HLS por el proxy de Cosmos:
+`cosmos-compose.json` es un servapp único (stack `cosmos-stack`) con un volumen
+compartido; el HLS sale por el proxy con el hostname por defecto
+(`{ServiceName}.{RootHostname}` → `timeshift.<tu-host-de-cosmos>`):
 
-1. Editá `Host` (`timeshift.example.com`) por tu dominio.
-2. Agregá el dominio en Cosmos → Domains (si no está).
-3. ServApps → *Import Docker Compose* / pegá el JSON de `cosmos-compose.json`.
+1. ServApps → *Import Docker Compose* (o pegá el JSON) y elegí el nombre.
+2. En el paso del hostname, dejá el default o cambialo.
+3. Instalá; el dominio se agrega solo en Cosmos → Domains.
 
-Queda en `https://timeshift.<tu-dominio>/index.m3u8`. Si es una Constellation,
-agregá `"Tunnel": "_ANY_"` al route.
+Queda en `https://timeshift.<tu-host-de-cosmos>/index.m3u8`. Si es una
+Constellation, agregá `"Tunnel": "_ANY_"` al route.
 
 URL para VLC / mpv / Jellyfin (tuner M3U):
 

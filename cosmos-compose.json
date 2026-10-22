@@ -1,11 +1,53 @@
 {
+  "cosmos-installer": {},
+  "minVersion": "0.9.0",
   "services": {
-    "timeshift-recorder": {
-      "container_name": "timeshift-recorder",
+    "{ServiceName}": {
+      "container_name": "{ServiceName}",
+      "hostname": "{ServiceName}",
+      "image": "ghcr.io/fermuch/caracol-tv-timeshifter:hls",
+      "restart": "unless-stopped",
+      "labels": {
+        "cosmos-force-network-secured": "true",
+        "cosmos-auto-update": "true",
+        "cosmos-stack": "{ServiceName}",
+        "cosmos-stack-main": "{ServiceName}"
+      },
+      "volumes": [
+        {
+          "type": "volume",
+          "source": "{ServiceName}-data",
+          "target": "/usr/share/nginx/html",
+          "readOnly": true
+        }
+      ],
+      "routes": [
+        {
+          "name": "{ServiceName}",
+          "description": "Caracol TV timeshift HLS",
+          "mode": "SERVAPP",
+          "target": "http://{ServiceName}:80",
+          "useHost": true,
+          "Host": "{ServiceName}.{RootHostname}",
+          "AuthEnabled": false,
+          "Timeout": 14400000,
+          "ThrottlePerMinute": 12000,
+          "BlockCommonBots": true,
+          "SmartShield": {
+            "Enabled": true
+          }
+        }
+      ]
+    },
+    "{ServiceName}-recorder": {
+      "container_name": "{ServiceName}-recorder",
+      "hostname": "{ServiceName}-recorder",
       "image": "ghcr.io/fermuch/caracol-tv-timeshifter:latest",
       "restart": "unless-stopped",
       "labels": {
-        "cosmos-auto-update": "true"
+        "cosmos-force-network-secured": "true",
+        "cosmos-auto-update": "true",
+        "cosmos-stack": "{ServiceName}"
       },
       "environment": [
         "SOURCE=http://138.121.15.230:9002/CARACOL/tracks-v1a1/mono.m3u8",
@@ -17,38 +59,8 @@
       "volumes": [
         {
           "type": "volume",
-          "source": "timeshift-data",
+          "source": "{ServiceName}-data",
           "target": "/data"
-        }
-      ]
-    },
-    "timeshift-hls": {
-      "container_name": "timeshift-hls",
-      "image": "ghcr.io/fermuch/caracol-tv-timeshifter:hls",
-      "restart": "unless-stopped",
-      "labels": {
-        "cosmos-auto-update": "true"
-      },
-      "volumes": [
-        {
-          "type": "volume",
-          "source": "timeshift-data",
-          "target": "/usr/share/nginx/html",
-          "readOnly": true
-        }
-      ],
-      "routes": [
-        {
-          "Name": "timeshift",
-          "Description": "Caracol TV timeshift HLS",
-          "Mode": "SERVAPP",
-          "Target": "http://timeshift-hls:80",
-          "UseHost": true,
-          "Host": "timeshift.example.com",
-          "AuthEnabled": false,
-          "SmartShield": {
-            "Enabled": false
-          }
         }
       ]
     }
