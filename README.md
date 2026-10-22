@@ -12,8 +12,21 @@ docker compose up -d --build
 Imagen publicada por CI (amd64 + arm64):
 
 ```
-ghcr.io/fermuch/caracol-tv-timeshifter:latest
+ghcr.io/fermuch/caracol-tv-timeshifter:latest   # recorder
+ghcr.io/fermuch/caracol-tv-timeshifter:hls      # nginx HLS (config incluida)
 ```
+
+### Cosmos Cloud
+
+`cosmos-compose.json` levanta los dos contenedores con un volumen compartido y
+expone el HLS por el proxy de Cosmos:
+
+1. Editá `Host` (`timeshift.example.com`) por tu dominio.
+2. Agregá el dominio en Cosmos → Domains (si no está).
+3. ServApps → *Import Docker Compose* / pegá el JSON de `cosmos-compose.json`.
+
+Queda en `https://timeshift.<tu-dominio>/index.m3u8`. Si es una Constellation,
+agregá `"Tunnel": "_ANY_"` al route.
 
 URL para VLC / mpv / Jellyfin (tuner M3U):
 
