@@ -40,6 +40,9 @@ MIN_DELAY = int(os.environ.get("MIN_DELAY", "6"))
 POLL = float(os.environ.get("POLL", "1.5"))
 SPARE = int(os.environ.get("SPARE", "12"))
 SEG_SECONDS = 5.0
+# The published edge can only advance while a candidate sits below head-MIN_DELAY,
+# so a DELAY smaller than that would publish once and then never move again.
+DELAY = max(DELAY, MIN_DELAY + 1)
 RETAIN = WINDOW + DELAY + SPARE
 
 PLAYLIST = SOURCE if SOURCE.endswith(".m3u8") else SOURCE.rstrip("/") + "/mono.m3u8"
