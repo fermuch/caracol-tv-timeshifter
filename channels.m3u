@@ -1,0 +1,3 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="caracoltv" tvg-chno="1" tvg-name="Caracol TV" group-title="Colombia",Caracol TV
+https://caracoltv.home.mumbach.dev/index.m3u8
